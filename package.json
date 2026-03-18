@@ -1,0 +1,41 @@
+{
+  "name": "@wizdomic/giitz",
+  "version": "1.0.0",
+  "description": "AI-powered Git workflow automation. Stage, commit, and push in one command.",
+  "keywords": [
+    "git",
+    "automation",
+    "ai",
+    "cli",
+    "devtools",
+    "openai",
+    "anthropic",
+    "gemini"
+  ],
+  "author": "wizdomic",
+  "license": "MIT",
+  "homepage": "https://github.com/wizdomic/giitz",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wizdomic/giitz.git"
+  },
+  "bugs": {
+    "url": "https://github.com/wizdomic/giitz/issues"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "bin": {
+    "giitz": "./bin/gitauto.js"
+  },
+  "files": [
+    "bin/gitauto.js",
+    "README.md",
+    "LICENSE.md"
+  ],
+  "dependencies": {},
+  "scripts": {
+    "test": "node --test tests/",
+    "lint": "node --check bin/gitauto.js"
+  }
+}
