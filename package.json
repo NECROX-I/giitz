@@ -1,6 +1,6 @@
 {
   "name": "@wizdomic/giitz",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "AI-powered Git workflow automation. Stage, commit, and push in one command.",
   "keywords": [
     "git",
