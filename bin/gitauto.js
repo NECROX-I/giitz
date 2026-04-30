@@ -122,42 +122,95 @@ function ensureAiPackage(provider) {
     throw new Error(`Failed to install ${pkg}:\n${r.stderr}`);
 }
 
+// Errors worth retrying — transient server/network issues
+function isRetryable(error) {
+  const msg = (error.message || "").toLowerCase();
+  const status = error.status || error.statusCode || 0;
+  return (
+    status === 503 || status === 502 || status === 529 ||
+    msg.includes("503") || msg.includes("502") || msg.includes("overloaded") ||
+    msg.includes("timeout") || msg.includes("econnreset") ||
+    msg.includes("socket hang up") || msg.includes("network")
+  );
+}
+
+// Errors NOT worth retrying — permanent failures
+function isPermanent(error) {
+  const msg = (error.message || "").toLowerCase();
+  const status = error.status || error.statusCode || 0;
+  return (
+    status === 401 || status === 403 || status === 404 ||
+    msg.includes("invalid") || msg.includes("auth") ||
+    msg.includes("quota") || msg.includes("credit") ||
+    msg.includes("insufficient")
+  );
+}
+
+async function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 async function callAI(provider, apiKey, aiPrompt) {
   ensureAiPackage(provider);
 
-  if (provider === "openai") {
-    const { OpenAI } = require(path.join(AI_MODULES_DIR, "openai"));
-    const client = new OpenAI({ apiKey });
-    const res = await client.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [{ role: "user", content: aiPrompt }],
-      max_tokens: 60,
-    });
-    return res.choices[0].message.content.trim();
+  const MAX_RETRIES = 3;
+  const RETRY_DELAYS = [1000, 3000, 6000]; // 1s, 3s, 6s
+
+  async function attempt() {
+    if (provider === "openai") {
+      const { OpenAI } = require(path.join(AI_MODULES_DIR, "openai"));
+      const client = new OpenAI({ apiKey });
+      const res = await client.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [{ role: "user", content: aiPrompt }],
+        max_tokens: 60,
+      });
+      return res.choices[0].message.content.trim();
+    }
+
+    if (provider === "anthropic") {
+      const Anthropic = require(path.join(AI_MODULES_DIR, "@anthropic-ai", "sdk"));
+      const client = new (Anthropic.default || Anthropic)({ apiKey });
+      const msg = await client.messages.create({
+        model: "claude-3-5-sonnet-20241022",
+        max_tokens: 100,
+        messages: [{ role: "user", content: aiPrompt }],
+      });
+      return msg.content[0].text.trim();
+    }
+
+    if (provider === "gemini") {
+      const { GoogleGenAI } = require(path.join(AI_MODULES_DIR, "@google", "genai"));
+      const ai  = new GoogleGenAI({ apiKey });
+      const res = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: aiPrompt,
+      });
+      return res.text.trim();
+    }
+
+    throw new Error(`Unknown provider: ${provider}`);
   }
 
-  if (provider === "anthropic") {
-    const Anthropic = require(path.join(AI_MODULES_DIR, "@anthropic-ai", "sdk"));
-    const client = new (Anthropic.default || Anthropic)({ apiKey });
-    const msg = await client.messages.create({
-      model: "claude-3-5-sonnet-20241022",
-      max_tokens: 100,
-      messages: [{ role: "user", content: aiPrompt }],
-    });
-    return msg.content[0].text.trim();
-  }
+  for (let i = 0; i < MAX_RETRIES; i++) {
+    try {
+      return await attempt();
+    } catch (error) {
+      // Permanent error — no point retrying
+      if (isPermanent(error)) throw error;
 
-  if (provider === "gemini") {
-    const { GoogleGenAI } = require(path.join(AI_MODULES_DIR, "@google", "genai"));
-    const ai  = new GoogleGenAI({ apiKey });
-    const res = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: aiPrompt,
-    });
-    return res.text.trim();
-  }
+      // Retryable error — wait and try again
+      if (isRetryable(error) && i < MAX_RETRIES - 1) {
+        const delay = RETRY_DELAYS[i];
+        warn(`AI service unavailable — retrying in ${delay / 1000}s... (${i + 1}/${MAX_RETRIES - 1})`);
+        await sleep(delay);
+        continue;
+      }
 
-  throw new Error(`Unknown provider: ${provider}`);
+      // Last attempt or unknown error — throw
+      throw error;
+    }
+  }
 }
 
 function handleAiError(provider, error) {
