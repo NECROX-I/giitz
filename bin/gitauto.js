@@ -413,6 +413,7 @@ async function getCommitMessage(config, diff, noAi) {
       const msg = await callAI(config.provider, config.apiKey, aiPrompt);
       if (!msg) throw new Error("Empty response from AI.");
 
+      if (msg.length > 72) warn("Commit message is long — consider shortening it.");
       console.log(`\n  ${C.green}${C.bold}${msg}${C.reset}\n`);
       const choice = (await prompt("Use this? (y / r=regenerate / m=manual) [y]: ")).toLowerCase() || "y";
 
@@ -466,6 +467,13 @@ async function run(opts) {
     process.exit(1);
   }
   ok(`Staged: ${files}`);
+
+  // Guard — verify something was actually staged
+  const staged = git("diff", "--cached", "--name-only");
+  if (!staged.stdout) {
+    warn("Nothing was staged — check your file paths.");
+    process.exit(1);
+  }
 
   // Commit message
   const config  = loadConfig();
