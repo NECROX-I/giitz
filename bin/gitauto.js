@@ -2,46 +2,46 @@
 "use strict";
 
 const { spawnSync } = require("child_process");
-const fs       = require("fs");
-const os       = require("os");
-const path     = require("path");
+const fs = require("fs");
+const os = require("os");
+const path = require("path");
 const readline = require("readline");
 
 // ---------------------------------------------------------------------------
 // Version & constants
 // ---------------------------------------------------------------------------
-const VERSION        = "1.0.1";
-const CONFIG_DIR     = path.join(os.homedir(), ".giitz");
-const CONFIG_FILE    = path.join(CONFIG_DIR, "config.json");
+const VERSION = "1.0.1";
+const CONFIG_DIR = path.join(os.homedir(), ".giitz");
+const CONFIG_FILE = path.join(CONFIG_DIR, "config.json");
 const WELCOME_MARKER = path.join(CONFIG_DIR, ".welcomed");
 const AI_MODULES_DIR = path.join(CONFIG_DIR, "node_modules");
 
 const PROVIDERS = ["openai", "anthropic", "gemini"];
 
 const AI_PACKAGES = {
-  openai:    "openai",
+  openai: "openai",
   anthropic: "@anthropic-ai/sdk",
-  gemini:    "@google/genai",
+  gemini: "@google/genai",
 };
 
 // ---------------------------------------------------------------------------
 // Colors
 // ---------------------------------------------------------------------------
 const C = {
-  reset:  "\x1b[0m",
-  bold:   "\x1b[1m",
-  dim:    "\x1b[2m",
-  red:    "\x1b[91m",
-  green:  "\x1b[92m",
+  reset: "\x1b[0m",
+  bold: "\x1b[1m",
+  dim: "\x1b[2m",
+  red: "\x1b[91m",
+  green: "\x1b[92m",
   yellow: "\x1b[93m",
-  cyan:   "\x1b[96m",
+  cyan: "\x1b[96m",
   purple: "\x1b[95m",
 };
 
-const ok   = (msg) => console.log(`${C.green}✓  ${msg}${C.reset}`);
+const ok = (msg) => console.log(`${C.green}✓  ${msg}${C.reset}`);
 const info = (msg) => console.log(`${C.cyan}ℹ  ${msg}${C.reset}`);
 const warn = (msg) => console.log(`${C.yellow}⚠  ${msg}${C.reset}`);
-const err  = (msg) => console.log(`${C.red}✗  ${msg}${C.reset}`);
+const err = (msg) => console.log(`${C.red}✗  ${msg}${C.reset}`);
 
 function header(text) {
   const bar = "═".repeat(34);
@@ -67,14 +67,14 @@ function loadConfig() {
   try {
     if (fs.existsSync(CONFIG_FILE))
       return JSON.parse(fs.readFileSync(CONFIG_FILE, "utf8"));
-  } catch (_) {}
+  } catch (_) { }
   return {};
 }
 
 function saveConfig(data) {
   fs.mkdirSync(CONFIG_DIR, { recursive: true });
   fs.writeFileSync(CONFIG_FILE, JSON.stringify(data, null, 2));
-  try { fs.chmodSync(CONFIG_FILE, 0o600); } catch (_) {}
+  try { fs.chmodSync(CONFIG_FILE, 0o600); } catch (_) { }
 }
 
 // ---------------------------------------------------------------------------
@@ -83,16 +83,16 @@ function saveConfig(data) {
 function git(...args) {
   const r = spawnSync("git", args, { encoding: "utf8" });
   return {
-    ok:     r.status === 0,
+    ok: r.status === 0,
     stdout: (r.stdout || "").trim(),
     stderr: (r.stderr || "").trim(),
   };
 }
 
-function isGitRepo()        { return git("rev-parse", "--git-dir").ok; }
-function getStatus()        { const r = git("status", "--short"); return r.ok ? r.stdout : ""; }
+function isGitRepo() { return git("rev-parse", "--git-dir").ok; }
+function getStatus() { const r = git("status", "--short"); return r.ok ? r.stdout : ""; }
 function getCurrentBranch() { const r = git("branch", "--show-current"); return r.ok && r.stdout ? r.stdout : "main"; }
-function getRemoteUrl()     { const r = git("remote", "get-url", "origin"); return r.ok ? r.stdout : "No remote configured"; }
+function getRemoteUrl() { const r = git("remote", "get-url", "origin"); return r.ok ? r.stdout : "No remote configured"; }
 
 function getDiff() {
   const staged = git("diff", "--cached");
@@ -105,7 +105,7 @@ function getDiff() {
 // AI — lazy install into ~/.giitz/node_modules
 // ---------------------------------------------------------------------------
 function ensureAiPackage(provider) {
-  const pkg     = AI_PACKAGES[provider];
+  const pkg = AI_PACKAGES[provider];
   const pkgPath = path.join(AI_MODULES_DIR, pkg.split("/")[0]);
 
   if (fs.existsSync(pkgPath)) return;
@@ -181,7 +181,7 @@ async function callAI(provider, apiKey, aiPrompt) {
 
     if (provider === "gemini") {
       const { GoogleGenAI } = require(path.join(AI_MODULES_DIR, "@google", "genai"));
-      const ai  = new GoogleGenAI({ apiKey });
+      const ai = new GoogleGenAI({ apiKey });
       const res = await ai.models.generateContent({
         model: "gemini-2.5-flash",
         contents: aiPrompt,
@@ -218,7 +218,7 @@ function handleAiError(provider, error) {
   if (msg.includes("credit") || msg.includes("quota") || msg.includes("insufficient")) {
     err("AI API credits exhausted.");
     if (provider === "anthropic") info("Billing: https://console.anthropic.com/settings/billing");
-    if (provider === "openai")    info("Billing: https://platform.openai.com/account/billing");
+    if (provider === "openai") info("Billing: https://platform.openai.com/account/billing");
     info("Or skip AI:  giitz --no-ai");
   } else if (msg.includes("invalid") || msg.includes("auth") || msg.includes("401")) {
     err("Invalid API key.");
@@ -402,10 +402,23 @@ async function getCommitMessage(config, diff, noAi) {
     return msg || null;
   }
 
-  const aiPrompt =
-    "Generate a very short (one-line, imperative tense, <=50 chars) " +
-    "git commit message summarising the changes below:\n\n" +
-    diff.slice(0, 3000);
+  const aiPrompt = `
+    Analyze the git diff and generate a git commit message.
+
+    Rules:
+    - Single line
+    - Imperative mood
+    - Max 50 characters
+    - Focus on the main change
+    - No quotes
+    - No trailing punctuation
+    - Return ONLY the message
+
+    If the diff is unclear, use a concise generic message.
+
+    Diff:
+    ${diff.slice(0, 3000)}
+    `;
 
   while (true) {
     info(`Generating via ${config.provider}...`);
@@ -459,9 +472,9 @@ async function run(opts) {
 
   // Stage
   const filesInput = await prompt("Files to add (. for all) [.]: ");
-  const files      = filesInput || ".";
-  const addArgs    = files === "." ? ["."] : files.split(/\s+/);
-  const addResult  = git("add", ...addArgs);
+  const files = filesInput || ".";
+  const addArgs = files === "." ? ["."] : files.split(/\s+/);
+  const addResult = git("add", ...addArgs);
   if (!addResult.ok) {
     err(`Failed to stage files: ${addResult.stderr}`);
     process.exit(1);
@@ -476,8 +489,8 @@ async function run(opts) {
   }
 
   // Commit message
-  const config  = loadConfig();
-  const diff    = getDiff();
+  const config = loadConfig();
+  const diff = getDiff();
   const message = await getCommitMessage(config, diff, opts.noAi);
   if (!message) {
     err("Commit message cannot be empty.");
@@ -535,12 +548,12 @@ function parseArgs(argv) {
     }
 
     switch (a) {
-      case "-v": case "--version":  opts.version   = true; break;
-      case "-h": case "--help":     opts.help      = true; break;
-      case "setup":                 opts.setup     = true; break;
-      case "--no-push":             opts.noPush    = true; break;
-      case "--no-ai":               opts.noAi      = true; break;
-      case "--force-push":          opts.forcePush = true; break;
+      case "-v": case "--version": opts.version = true; break;
+      case "-h": case "--help": opts.help = true; break;
+      case "setup": opts.setup = true; break;
+      case "--no-push": opts.noPush = true; break;
+      case "--no-ai": opts.noAi = true; break;
+      case "--force-push": opts.forcePush = true; break;
       case "--branch": case "-b":
         i++;
         if (i >= args.length) {
@@ -562,7 +575,7 @@ function parseArgs(argv) {
   const opts = parseArgs(process.argv);
 
   if (opts.version) { console.log(`GIITZ v${VERSION}`); process.exit(0); }
-  if (opts.help)    { printHelp(); process.exit(0); }
+  if (opts.help) { printHelp(); process.exit(0); }
 
   firstRunCheck();
 
