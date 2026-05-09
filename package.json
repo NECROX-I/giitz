@@ -1,5 +1,5 @@
 {
-  "name": "@wizdomic/giitz",
+  "name": "@necrox/giitz",
   "version": "1.0.1",
   "description": "AI-powered Git workflow automation. Stage, commit, and push in one command.",
   "keywords": [

@@ -13,7 +13,7 @@ No Python. No pip. Just Node.js.
 ## Install
 
 ```bash
-npm install -g @wizdomic/giitz
+npm install -g @necrox/giitz
 ```
 
 ---
