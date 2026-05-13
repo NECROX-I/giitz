@@ -78,8 +78,8 @@ Push to remote? (y/n) [y]: y
 ## Upgrade & Uninstall
 
 ```bash
-npm update -g @wizdomic/giitz
-npm uninstall -g @wizdomic/giitz
+npm update -g @necrox/giitz
+npm uninstall -g @necrox/giitz
 ```
 
 ---
